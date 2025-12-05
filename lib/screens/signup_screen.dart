@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'signup_screen.dart';
+import 'login_screen.dart';
 import 'home_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignupScreenState extends State<SignupScreen> {
   bool showPassword = false;
+  bool showConfirmPassword = false;
 
-  void _login() {
+  void _signup() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
               const Text(
-                'Sign in to your\nAccount',
+                'Create your\nAccount',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
@@ -68,6 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 35),
+              label('Name'),
+              field('Enter your Name'),
+              const SizedBox(height: 20),
               label('Email'),
               field('Enter your Email'),
               const SizedBox(height: 20),
@@ -76,16 +80,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscure: !showPassword,
                 onToggle: () => setState(() => showPassword = !showPassword),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () {},
-                  child: const Text(
-                    'Forgot password?',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
+              const SizedBox(height: 20),
+              label('Confirm Password'),
+              passwordField(
+                obscure: !showConfirmPassword,
+                onToggle: () => setState(() => showConfirmPassword = !showConfirmPassword),
               ),
               const SizedBox(height: 35),
               SizedBox(
@@ -99,9 +98,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       side: const BorderSide(color: Colors.white),
                     ),
                   ),
-                  onPressed: _login,
+                  onPressed: _signup,
                   child: const Text(
-                    'Login',
+                    'Sign up',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.white,
@@ -114,18 +113,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    "Don't have an account? ",
+                    'Already have an account? ',
                     style: TextStyle(color: Colors.white70),
                   ),
                   GestureDetector(
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
                       );
                     },
                     child: const Text(
-                      'Sign up',
+                      'Login',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
