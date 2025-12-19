@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:recipe_finder/screens/button_navigation/bottom_nav_screen.dart';
+
+
 import 'signup_screen.dart';
-import 'home_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const BottomNavScreen()),
     );
   }
 
