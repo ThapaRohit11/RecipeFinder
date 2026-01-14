@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:recipe_finder/screens/login_screen.dart';
+import 'package:recipe_finder/features/onboarding/presentation/pages/onboarding2_screen.dart';
 
-class Onboarding3Screen extends StatelessWidget {
-  const Onboarding3Screen({super.key});
+
+class Onboarding1Screen extends StatelessWidget {
+  const Onboarding1Screen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +22,9 @@ class Onboarding3Screen extends StatelessWidget {
                   const SizedBox(height: 24),
                   Image.asset('assets/images/logo.png', width: 120, height: 120),
                   const SizedBox(height: 30),
-                  Text('Share Your Meals', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('Start Cooking', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  Text('Save and share your favorite recipes with friends', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70), textAlign: TextAlign.center),
+                  Text("Let's join our community to cook better food!", style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70), textAlign: TextAlign.center),
                 ],
               ),
             ),
@@ -36,10 +37,10 @@ class Onboarding3Screen extends StatelessWidget {
               onPressed: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  MaterialPageRoute(builder: (context) => const Onboarding2Screen()),
                 );
               },
-              child: const Text('Done'),
+              child: const Text('Next'),
             ),
           ),
         ],

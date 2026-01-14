@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:recipe_finder/screens/button_navigation/bottom_nav_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/pages/home_screen.dart';
+
 
 
 import 'signup_screen.dart';
@@ -18,7 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 

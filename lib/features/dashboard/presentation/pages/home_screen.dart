@@ -28,12 +28,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(30),
                 ),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search',
-                    hintStyle: TextStyle(color: Colors.grey.shade600),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
-                    border: InputBorder.none,
+                child: Material(
+                  color: Colors.transparent,
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search',
+                      hintStyle: TextStyle(color: Colors.grey.shade600),
+                      prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                      border: InputBorder.none,
+                    ),
                   ),
                 ),
               ),

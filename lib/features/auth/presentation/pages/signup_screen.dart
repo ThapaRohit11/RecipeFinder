@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:recipe_finder/screens/button_navigation/home_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/pages/home_screen.dart';
+
 
 import 'login_screen.dart';
 
