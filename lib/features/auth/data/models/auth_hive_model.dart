@@ -41,6 +41,8 @@ class AuthHiveModel extends HiveObject {
       password: entity.password,
     );
   }
+
+  Null get username => null;
   //to entity
   AuthEntity toEntity() {
     return AuthEntity(
