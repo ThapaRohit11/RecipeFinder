@@ -1,38 +1,34 @@
-import 'package:recipe_finder/features/auth/domain/entities/auth_entity.dart';
 import 'package:equatable/equatable.dart';
+import 'package:recipe_finder/features/auth/domain/entities/auth_entity.dart';
 
-enum AuthStatus {
-  initial,
-  loading,
-  authenticated,
-  unauthenticated,
-  registered,
-  error,
-}
+enum AuthStatus{initial, loading, authenticated, registered, unauthenticated, error}
 
-class AuthState extends Equatable {
+class AuthState extends Equatable{
   final AuthStatus status;
-  final AuthEntity? user;
+  final AuthEntity? authEntity;
   final String? errorMessage;
 
   const AuthState({
     this.status = AuthStatus.initial,
-    this.user,
+    this.authEntity,
     this.errorMessage,
   });
 
-  AuthState copyWith({
+  //copywith
+   AuthState copyWith({
     AuthStatus? status,
-    AuthEntity? user,
+    AuthEntity? authEntity,
     String? errorMessage,
-  }) {
+   }){
     return AuthState(
       status: status ?? this.status,
-      user: user ?? this.user,
+      authEntity: authEntity ?? this.authEntity,
       errorMessage: errorMessage ?? this.errorMessage,
     );
-  }
-
+   }
   @override
-  List<Object?> get props => [status, user, errorMessage];
+  // TODO: implement props
+  List<Object?> get props => [status, authEntity, errorMessage];
+
+
 }

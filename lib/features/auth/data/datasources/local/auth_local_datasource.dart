@@ -4,7 +4,6 @@ import 'package:recipe_finder/core/services/hive/hive_service.dart';
 import 'package:recipe_finder/features/auth/data/datasources/auth_datasource.dart';
 import 'package:recipe_finder/features/auth/data/models/auth_hive_model.dart';
 
-
 //provider
 final authLocalDatasourceProvider = Provider<AuthLocalDatasource>((ref){
   final hiveService = ref.read(hiveServiceProvider);
@@ -48,11 +47,11 @@ class AuthLocalDatasource implements IAuthDatasource{
         await _userSessionService.saveUserSession(
           userId: user.authId!, 
           email: user.email, 
-          //username: user.username, 
-          fullName: user.fullName, username: '', 
+          username: user.username, 
+          fullName: user.fullName, 
           //phoneNumber: user.phoneNumber, 
           //batchId: user.batchId,
-          
+          profilePicture: user.profilePicture ?? '',
         );
       }
       return user;

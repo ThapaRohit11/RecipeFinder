@@ -166,8 +166,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               await ref
                                   .read(authViewModelProvider.notifier)
                                   .login(
-                                    email: _emailController.text.trim(),
-                                    password: _passwordController.text,
+                                    _emailController.text.trim(),
+                                    _passwordController.text,
                                   );
                             }
                           },

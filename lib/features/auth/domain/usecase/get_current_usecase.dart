@@ -2,10 +2,9 @@ import 'package:recipe_finder/core/error/failures.dart';
 import 'package:recipe_finder/core/usecase/app_usecase.dart';
 import 'package:recipe_finder/features/auth/data/repositories/auth_repository.dart';
 import 'package:recipe_finder/features/auth/domain/entities/auth_entity.dart';
+import 'package:recipe_finder/features/auth/domain/repositories/auth_repositories.dart';
 import 'package:dartz/dartz.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../repositories/auth_repositories.dart';
 
 // Create Provider
 final getCurrentUserUsecaseProvider = Provider<GetCurrentUserUsecase>((ref) {

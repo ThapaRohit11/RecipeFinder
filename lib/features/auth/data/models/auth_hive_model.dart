@@ -1,62 +1,56 @@
-
+import 'package:hive/hive.dart';
 import 'package:recipe_finder/core/constants/hive_table_constants.dart';
 import 'package:recipe_finder/features/auth/domain/entities/auth_entity.dart';
-import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 part 'auth_hive_model.g.dart';
 
-@HiveType(typeId: HiveTableConstants.authTypeId)
-class AuthHiveModel extends HiveObject {
+@HiveType(typeId:HiveTableConstant.authTypeId)
+class AuthHiveModel extends HiveObject{
+
   @HiveField(0)
   final String? authId;
-
   @HiveField(1)
   final String fullName;
-
   @HiveField(2)
   final String email;
-
   @HiveField(3)
-  final String? phoneNumber;
-
+  final String username;
   @HiveField(4)
   final String? password;
+  @HiveField(5)
+  final String? profilePicture;
 
   AuthHiveModel({
     String? authId,
     required this.fullName,
     required this.email,
-    this.phoneNumber,
+    required this.username,
     this.password,
+    this.profilePicture,
   }) : authId = authId ?? Uuid().v4();
 
-  //from entity
-  factory AuthHiveModel.fromEntity(AuthEntity entity) {
+  //From Entity
+   factory AuthHiveModel.fromEntiity(AuthEntity entity){
     return AuthHiveModel(
       authId: entity.authId,
       fullName: entity.fullName,
       email: entity.email,
-      phoneNumber: entity.phoneNumber,
+      username: entity.username,
       password: entity.password,
+      profilePicture: entity.profilePicture,
     );
-  }
+   }
 
-  Null get username => null;
-  //to entity
-  AuthEntity toEntity() {
+  //To Entity
+  AuthEntity toEntity(){
     return AuthEntity(
       authId: authId,
       fullName: fullName,
       email: email,
-      phoneNumber: phoneNumber,
+      username: username,
       password: password,
+      profilePicture: profilePicture,
     );
   }
-
-  //to entity list
-  static List<AuthEntity> toEntityList(List<AuthHiveModel> models) {
-    return models.map((model) => model.toEntity()).toList();
-  }
 }
-
