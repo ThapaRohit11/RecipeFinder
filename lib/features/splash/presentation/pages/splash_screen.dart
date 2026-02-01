@@ -1,6 +1,6 @@
 import 'package:recipe_finder/app/routes/app_routes.dart';
 import 'package:recipe_finder/core/services/storage/user_session_service.dart';
-import 'package:recipe_finder/features/dashboard/presentation/pages/home_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/pages/button_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_finder/features/onboarding/presentation/pages/onboarding_screen.dart';
@@ -24,7 +24,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       final isLoggedIn = userSessionService.isLoggedIn();
 
       if (isLoggedIn) {
-        AppRoutes.pushReplacement(context, const HomeScreen());
+        AppRoutes.pushReplacement(context, const ButtonNavigation());
       } else {
         AppRoutes.pushReplacement(context, const OnboardingScreen());
       }
