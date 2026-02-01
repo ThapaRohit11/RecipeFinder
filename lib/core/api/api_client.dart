@@ -120,13 +120,12 @@ class _AuthInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     // List of public endpoints
     const publicEndpoints = {
-      ApiEndpoints.customers,
       ApiEndpoints.customerLogin,
       ApiEndpoints.customerRegister,
     };
 
     // Skip adding token for public endpoints
-    final skipAuth = publicEndpoints.any((endpoint) => options.path.contains(endpoint));
+    final skipAuth = publicEndpoints.any((endpoint) => options.path == endpoint);
 
     if (!skipAuth) {
       final token = await _userSessionService.getToken();
