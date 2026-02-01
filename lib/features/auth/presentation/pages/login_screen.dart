@@ -2,7 +2,7 @@ import 'package:recipe_finder/features/auth/presentation/state/auth_state.dart';
 import 'package:recipe_finder/features/auth/presentation/view_model/auth_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:recipe_finder/features/dashboard/presentation/pages/home_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/pages/button_navigation.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -40,7 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const ButtonNavigation()),
         );
       } else if (next.status == AuthStatus.error) {
         ScaffoldMessenger.of(context).showSnackBar(
