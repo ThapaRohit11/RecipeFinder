@@ -79,4 +79,6 @@ class UserSessionService {
     await _prefs.remove(_keyUserFullName);
     await _secureStorage.delete(key: _keyToken);
   }
+
+  void debugPrintUserData() {}
 }
