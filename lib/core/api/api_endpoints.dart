@@ -26,6 +26,7 @@ class ApiEndpoints {
   static const String customers = '/customers';
   static const String customerLogin = '/customers/login';
   static const String customerRegister = '/customers/signup';
+  static const String uploadProfilePicture = '/customers/profile-picture';
   // static String customerById(String id) => '/customers/$id';
   // // ============ Item Endpoints ============
   // static const String items = '/items';
