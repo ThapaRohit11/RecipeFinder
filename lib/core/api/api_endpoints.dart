@@ -1,15 +1,32 @@
 
+import 'package:flutter/foundation.dart';
+
 class ApiEndpoints {
   ApiEndpoints._();
 
-  // Base URL - change this for production
-  static const String baseUrl = 'http://10.0.2.2:3000/recipefinder';
-  //static const String baseUrl = 'http://localhost:3000/recipefinder';
-  //static const String baseUrl = 'http://192.168.1.xxx:3000/recipefinder'; // Replace xxx with your IP
-  // For Android Emulator use: 'http://10.0.2.2:3000/recipefinder'
-  // For iOS Simulator use: 'http://localhost:3000/recipefinder'
-  // For Physical Device use your computer's IP: 'http://192.168.x.x:3000/recipefinder'
-  // For Windows Desktop use: 'http://localhost:3000/recipefinder'
+  // Base URL (override with --dart-define=API_BASE_URL=http://<host>:5000)
+  static const String _baseUrlFromEnv = String.fromEnvironment('API_BASE_URL');
+  static String get baseUrl {
+    if (_baseUrlFromEnv.isNotEmpty) {
+      return _baseUrlFromEnv;
+    }
+
+    if (kIsWeb) {
+      return 'http://localhost:5000';
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'http://192.168.1.110:5000';
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+      case TargetPlatform.linux:
+        return 'http://localhost:5000';
+      default:
+        return 'http://localhost:5000';
+    }
+  }
 
   static const Duration connectionTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 10);
@@ -23,10 +40,21 @@ class ApiEndpoints {
   // static String categoryById(String id) => '/categories/$id';
 
   // ============ Customer Endpoints ============
-  static const String customers = '/customers';
-  static const String customerLogin = '/customers/login';
-  static const String customerRegister = '/customers/signup';
-  static const String uploadProfilePicture = '/customers/profile-picture';
+  static const String customers = '/api/auth';
+  static const String customerLogin = '/api/auth/login';
+  static const String customerRegister = '/api/auth/register';
+  static const String uploadProfilePicture = '/api/auth';
+  static String customerProfileById(String id) => '/api/auth/$id';
+
+  // ============ Recipe Endpoints ============
+  static const String recipes = '/api/recipes';
+  static const String myRecipes = '/api/recipes/my';
+  static String recipeById(String recipeId) => '/api/recipes/$recipeId';
+
+  // ============ Favorite Endpoints ============
+  static const String favorites = '/api/favorites';
+  static String favoriteByRecipeId(String recipeId) => '/api/favorites/$recipeId';
+  static String favoriteStatusByRecipeId(String recipeId) => '/api/favorites/$recipeId/status';
   // static String customerById(String id) => '/customers/$id';
   // // ============ Item Endpoints ============
   // static const String items = '/items';
