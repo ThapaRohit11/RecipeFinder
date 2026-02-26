@@ -6,18 +6,33 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:recipe_finder/core/api/api_client.dart';
 import 'package:recipe_finder/core/api/api_endpoints.dart';
-import 'package:recipe_finder/features/auth/presentation/pages/signup_screen.dart';
+import 'package:recipe_finder/core/services/storage/user_session_service.dart';
+import 'package:recipe_finder/app/theme/theme_mode_provider.dart';
+import 'package:recipe_finder/features/auth/presentation/pages/login_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/pages/my_recipes_screen.dart';
+import 'package:recipe_finder/features/dashboard/presentation/widgets/dashboard_background.dart';
 import 'package:dio/dio.dart';
 
-final profilePictureProvider = StateNotifierProvider<ProfilePictureNotifier, File?>((ref) {
+final profilePictureProvider = StateNotifierProvider<ProfilePictureNotifier, _ProfilePictureState>((ref) {
   return ProfilePictureNotifier();
 });
 
-class ProfilePictureNotifier extends StateNotifier<File?> {
-  ProfilePictureNotifier() : super(null);
+class _ProfilePictureState {
+  final String? userId;
+  final File? file;
 
-  void setProfilePicture(File? picture) {
-    state = picture;
+  const _ProfilePictureState({this.userId, this.file});
+}
+
+class ProfilePictureNotifier extends StateNotifier<_ProfilePictureState> {
+  ProfilePictureNotifier() : super(const _ProfilePictureState());
+
+  void setProfilePictureForUser({required String userId, required File picture}) {
+    state = _ProfilePictureState(userId: userId, file: picture);
+  }
+
+  void clear() {
+    state = const _ProfilePictureState();
   }
 }
 
@@ -31,6 +46,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploading = false;
+  bool _isProfileUpdating = false;
 
   Future<void> _pickImageFromCamera() async {
     try {
@@ -52,8 +68,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final pickedFile = await _imagePicker.pickImage(source: ImageSource.camera);
       if (pickedFile == null) return;
 
+      final userId = ref.read(userSessionServiceProvider).getCurrentUserId();
+      if (userId == null || userId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update picture. Please login again.')),
+        );
+        return;
+      }
+
       final File imageFile = File(pickedFile.path);
-      ref.read(profilePictureProvider.notifier).setProfilePicture(imageFile);
+      ref
+          .read(profilePictureProvider.notifier)
+          .setProfilePictureForUser(userId: userId, picture: imageFile);
 
       // Upload to backend
       await _uploadProfilePicture(imageFile);
@@ -71,20 +98,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     try {
       final apiClient = ref.read(apiClientProvider);
+      final session = ref.read(userSessionServiceProvider);
+      final userId = session.getCurrentUserId();
+
+      if (userId == null || userId.isEmpty) {
+        throw Exception('Unable to update picture. Please login again.');
+      }
 
       final formData = FormData.fromMap({
-        'profilePicture': await MultipartFile.fromFile(
+        'image': await MultipartFile.fromFile(
           imageFile.path,
           filename: 'profile_picture.jpg',
         ),
       });
 
-      await apiClient.uploadFile(
-        ApiEndpoints.uploadProfilePicture,
-        formData: formData,
+      final response = await apiClient.put(
+        ApiEndpoints.customerProfileById(userId),
+        data: formData,
+        options: Options(extra: {'noRetry': true}),
+      );
+
+      final body = response.data;
+      if (body is! Map<String, dynamic>) {
+        throw Exception('Unexpected server response');
+      }
+
+      if (body['success'] != true) {
+        throw Exception((body['message'] ?? 'Failed to update picture').toString());
+      }
+
+      final data = body['data'] is Map<String, dynamic>
+          ? body['data'] as Map<String, dynamic>
+          : <String, dynamic>{};
+      final imagePath = (data['image'] ?? data['profilePicture'] ?? '').toString();
+
+      await session.saveUserSession(
+        userId: userId,
+        email: session.getCurrentUserEmail() ?? '',
+        fullName: session.getCurrentUserFullName() ?? '',
+        username: session.getCurrentUsername() ?? '',
+        profilePicture: imagePath,
       );
 
       if (!mounted) return;
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Profile picture updated successfully'),
@@ -103,100 +160,602 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout != true) {
+      return;
+    }
+
+    await ref.read(userSessionServiceProvider).clearSession();
+    ref.read(profilePictureProvider.notifier).clear();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _openEditProfileSheet() async {
+    final session = ref.read(userSessionServiceProvider);
+    final currentName = session.getCurrentUserFullName() ?? '';
+    final currentEmail = session.getCurrentUserEmail() ?? '';
+
+    final nameController = TextEditingController(text: currentName);
+    final emailController = TextEditingController(text: currentEmail);
+    final formKey = GlobalKey<FormState>();
+
+    final payload = await showModalBottomSheet<_EditProfilePayload>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Edit Profile',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Name cannot be empty';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) {
+                      return 'Email cannot be empty';
+                    }
+                    if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (formKey.currentState?.validate() != true) {
+                        return;
+                      }
+
+                      Navigator.pop(
+                        sheetContext,
+                        _EditProfilePayload(
+                          fullName: nameController.text.trim(),
+                          email: emailController.text.trim(),
+                        ),
+                      );
+                    },
+                    child: const Text('Save Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (payload == null || !mounted) return;
+    await _updateProfile(payload);
+  }
+
+  Future<void> _updateProfile(_EditProfilePayload payload) async {
+    final session = ref.read(userSessionServiceProvider);
+    final userId = session.getCurrentUserId();
+
+    if (userId == null || userId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to update profile. Please login again.')),
+      );
+      return;
+    }
+
+    setState(() => _isProfileUpdating = true);
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final (firstName, lastName) = _splitName(payload.fullName);
+
+      final response = await apiClient.put(
+        '${ApiEndpoints.customers}/$userId',
+        data: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': payload.email,
+        },
+        options: Options(extra: {'noRetry': true}),
+      );
+
+      final body = response.data;
+      if (body is! Map<String, dynamic>) {
+        throw Exception('Unexpected server response');
+      }
+
+      if (body['success'] != true) {
+        throw Exception((body['message'] ?? 'Profile update failed').toString());
+      }
+
+      final data = body['data'] is Map<String, dynamic>
+          ? body['data'] as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      final responseFirst = (data['firstName'] ?? firstName).toString();
+      final responseLast = (data['lastName'] ?? lastName).toString();
+      final responseFullName = [responseFirst, responseLast]
+          .where((part) => part.trim().isNotEmpty)
+          .join(' ')
+          .trim();
+      final updatedFullName = responseFullName.isEmpty ? payload.fullName : responseFullName;
+      final updatedEmail = (data['email'] ?? payload.email).toString();
+      final updatedUsername = (data['username'] ?? updatedEmail.split('@').first).toString();
+      final updatedImage = (data['image'] ?? session.getCurrentUserProfilePicture() ?? '').toString();
+
+      await session.saveUserSession(
+        userId: userId,
+        email: updatedEmail,
+        fullName: updatedFullName,
+        username: updatedUsername,
+        profilePicture: updatedImage,
+      );
+
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final serverMessage = e.response?.data is Map<String, dynamic>
+          ? (e.response?.data['message']?.toString())
+          : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(serverMessage ?? e.message ?? 'Profile update failed')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProfileUpdating = false);
+      }
+    }
+  }
+
+  (String, String) _splitName(String fullName) {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) {
+      return ('', '');
+    }
+    if (parts.length == 1) {
+      return (parts.first, '');
+    }
+    return (parts.first, parts.sublist(1).join(' '));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final profilePicture = ref.watch(profilePictureProvider);
+    final session = ref.read(userSessionServiceProvider);
+    final userId = session.getCurrentUserId() ?? '';
+    final profilePictureState = ref.watch(profilePictureProvider);
+    final profilePicture = profilePictureState.userId == userId ? profilePictureState.file : null;
+    final userName = session.getCurrentUserFullName() ?? 'Recipe Lover';
+    final userEmail = session.getCurrentUserEmail() ?? 'your@email.com';
+    final profilePictureUrl = session.getCurrentUserProfilePicture();
+    final avatarImage = profilePicture != null
+        ? FileImage(profilePicture) as ImageProvider
+        : _networkProfileImage(profilePictureUrl);
+    final themeMode = ref.watch(themeModeProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Profile Picture Section
-            GestureDetector(
-              onTap: _isUploading ? null : _pickImageFromCamera,
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: profilePicture != null
-                        ? FileImage(profilePicture)
-                        : null,
-                    child: profilePicture == null
-                        ? Icon(
-                            Icons.person,
-                            size: 60,
-                            color: Colors.grey[600],
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+    return DashboardBackground(
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Profile',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _isUploading ? null : _pickImageFromCamera,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 54,
+                            backgroundColor: colorScheme.primary.withValues(alpha: 0.18),
+                            backgroundImage: avatarImage,
+                            child: avatarImage == null
+                                ? Icon(
+                                    Icons.person,
+                                    size: 54,
+                                    color: colorScheme.primary,
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              child: _isUploading
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                            ),
                           ),
                         ],
                       ),
-                      padding: const EdgeInsets.all(8),
-                      child: _isUploading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      userName,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      userEmail,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Tap profile picture to update',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _profileActionCard(
+                icon: Icons.edit_outlined,
+                title: 'Edit Profile',
+                subtitle: 'Update your name, email and personal info',
+                onTap: _openEditProfileSheet,
+                isLoading: _isProfileUpdating,
+              ),
+              const SizedBox(height: 12),
+              _profileActionCard(
+                icon: Icons.menu_book_outlined,
+                title: 'My Recipes',
+                subtitle: 'View and manage recipes posted by you',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MyRecipesScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _themeModeCard(
+                isDarkMode: isDarkMode,
+                onChanged: (value) {
+                  ref.read(themeModeProvider.notifier).setDarkMode(value);
+                },
+              ),
+              const SizedBox(height: 12),
+              _profileActionCard(
+                icon: Icons.settings_outlined,
+                title: 'App Settings',
+                subtitle: 'Control your preferences and app behavior',
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Settings coming soon')),
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _logout,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                ],
+                  icon: const Icon(Icons.logout),
+                  label: const Text(
+                    'Logout',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Tap to change profile picture',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Profile Screen',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SignupScreen()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              child: const Text(
-                'Logout',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _themeModeCard({
+    required bool isDarkMode,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isDarkMode ? Icons.dark_mode : Icons.light_mode,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dark Mode',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isDarkMode ? 'Dark theme enabled' : 'Light theme enabled',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: isDarkMode,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  ImageProvider? _networkProfileImage(String? imagePath) {
+    if (imagePath == null || imagePath.trim().isEmpty) {
+      return null;
+    }
+
+    final trimmedPath = imagePath.trim();
+    final resolvedUrl = trimmedPath.startsWith('http://') || trimmedPath.startsWith('https://')
+        ? trimmedPath
+        : '${ApiEndpoints.baseUrl}$trimmedPath';
+    return NetworkImage(resolvedUrl);
+  }
+
+  Widget _profileActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool isLoading = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLoading ? null : onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditProfilePayload {
+  final String fullName;
+  final String email;
+
+  const _EditProfilePayload({
+    required this.fullName,
+    required this.email,
+  });
 }
 
 
