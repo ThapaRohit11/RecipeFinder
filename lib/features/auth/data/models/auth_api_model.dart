@@ -20,21 +20,41 @@ class AuthApiModel{
   });
 
   Map<String, dynamic> toJson(){
+    final nameParts = _splitName(fullName);
     return{
-      "name": fullName,
+      "firstName": nameParts.$1,
+      "lastName": nameParts.$2,
       "email": email,
+      "username": username,
       "password": password,
+      "confirmPassword": password,
     };
   }
 
   factory AuthApiModel.fromJson(Map<String,dynamic> json){
-    final email = json['email'] as String;
+    final email = (json['email'] ?? '') as String;
+    final firstName = (json['firstName'] ?? '').toString().trim();
+    final lastName = (json['lastName'] ?? '').toString().trim();
+    final fallbackName = (json['name'] ?? '').toString().trim();
+    final fallbackUsername = (json['username'] ?? '').toString().trim();
+    final computedFullName = [firstName, lastName]
+        .where((part) => part.isNotEmpty)
+        .join(' ');
+    final resolvedFullName = computedFullName.isNotEmpty
+        ? computedFullName
+        : (fallbackName.isNotEmpty
+            ? fallbackName
+            : (fallbackUsername.isNotEmpty
+                ? fallbackUsername
+                : (email.isNotEmpty ? email.split('@').first : '')));
     return AuthApiModel(
       id: json['_id'] as String?,
-      fullName: json['name'] as String,
+      fullName: resolvedFullName,
       email: email,
-      username: email.split('@').first, // Generate username from email
-      profilePicture: json['profilePicture'] as String?,
+      username: fallbackUsername.isNotEmpty
+          ? fallbackUsername
+          : (email.isNotEmpty ? email.split('@').first : ''),
+      profilePicture: (json['image'] ?? json['profilePicture']) as String?,
     );
   }
 
@@ -60,6 +80,17 @@ class AuthApiModel{
 
   static List<AuthEntity> toEntityList(List<AuthApiModel> models){
     return models.map((model)=>model.toEntity()).toList();
+  }
+
+  static (String, String) _splitName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) {
+      return ('', '');
+    }
+    if (parts.length == 1) {
+      return (parts.first, '');
+    }
+    return (parts.first, parts.sublist(1).join(' '));
   }
 
 }
