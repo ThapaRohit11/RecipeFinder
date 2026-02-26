@@ -55,6 +55,10 @@ class ApiClient {
           Duration(seconds: 4),
         ],
         retryEvaluator: (error, attempt) {
+          if (error.requestOptions.extra['noRetry'] == true) {
+            return false;
+          }
+
           return error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.sendTimeout ||
               error.type == DioExceptionType.receiveTimeout ||
@@ -92,6 +96,10 @@ class ApiClient {
   Future<Response> put(String path,
           {dynamic data, Map<String, dynamic>? queryParameters, Options? options}) =>
       _dio.put(path, data: data, queryParameters: queryParameters, options: options);
+
+    Future<Response> patch(String path,
+        {dynamic data, Map<String, dynamic>? queryParameters, Options? options}) =>
+      _dio.patch(path, data: data, queryParameters: queryParameters, options: options);
 
   Future<Response> delete(String path,
           {dynamic data, Map<String, dynamic>? queryParameters, Options? options}) =>
