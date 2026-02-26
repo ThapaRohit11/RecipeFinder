@@ -14,28 +14,48 @@ class ButtonNavigation extends StatefulWidget {
 
 class _ButtonNavigationState extends State<ButtonNavigation> {
   int _currentIndex = 0;
+  final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<FavouriteScreenState> _favouriteKey = GlobalKey<FavouriteScreenState>();
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    AddScreen(),
-    FavouriteScreen(),
-    ProfileScreen(),
-  ];
+  void _handleRecipeCreated() {
+    setState(() {
+      _currentIndex = 0;
+    });
+    _homeKey.currentState?.refreshRecipes();
+  }
+
+  void _handleFavoriteChanged() {
+    _homeKey.currentState?.refreshRecipes();
+    _favouriteKey.currentState?.refreshFavorites();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          HomeScreen(
+            key: _homeKey,
+            onFavoriteChanged: _handleFavoriteChanged,
+          ),
+          AddScreen(onRecipeCreated: _handleRecipeCreated),
+          FavouriteScreen(
+            key: _favouriteKey,
+            onFavoriteChanged: _handleFavoriteChanged,
+          ),
+          const ProfileScreen(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,
 
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
+        selectedItemColor: colorScheme.primary,
+        unselectedItemColor: colorScheme.onSurfaceVariant,
+        backgroundColor: colorScheme.surface,
 
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.bold,
