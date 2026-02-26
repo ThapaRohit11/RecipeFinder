@@ -40,7 +40,7 @@ AuthRepository({required IAuthRemoteDataSource remoteDatasouce})
       return Right(entity);
     }
     return Left(LocalDatabaseFailure(message: 'Invalid email or password'));
-   }on Exception catch(e){
+   }catch(e){
     return Left(LocalDatabaseFailure(message: e.toString()));
    }
   }
@@ -62,7 +62,7 @@ AuthRepository({required IAuthRemoteDataSource remoteDatasouce})
       final model = AuthApiModel.fromEntity(entity);
       await _remoteDatasouce.register(model);
       return Right(true);
-    }on Exception catch(e){
+    }catch(e){
       return Left(LocalDatabaseFailure(message: e.toString()));
     }
   }
