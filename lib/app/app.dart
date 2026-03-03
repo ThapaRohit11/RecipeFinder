@@ -1,16 +1,65 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_finder/app/theme/theme_mode_provider.dart';
 import 'package:recipe_finder/features/splash/presentation/pages/splash_screen.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 // Screen imports removed because navigation is done directly inside screens (no named routes)
 
 // onboarding and home imports are intentionally omitted to avoid unused-import warnings
 
-class App extends ConsumerWidget {
+class App extends ConsumerStatefulWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<App> createState() => _AppState();
+}
+
+class _AppState extends ConsumerState<App> {
+  static const double _shakeThreshold = 2.2;
+  static const Duration _toggleCooldown = Duration(milliseconds: 1200);
+
+  StreamSubscription<UserAccelerometerEvent>? _accelerometerSub;
+  DateTime _lastToggleAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void initState() {
+    super.initState();
+
+    _accelerometerSub = userAccelerometerEventStream().listen((event) {
+      final isSensorEnabled = ref.read(shakeThemeSensorProvider);
+      if (!isSensorEnabled) {
+        return;
+      }
+
+      final acceleration = sqrt((event.x * event.x) + (event.y * event.y) + (event.z * event.z));
+      if (acceleration < _shakeThreshold) {
+        return;
+      }
+      unawaited(_toggleThemeFromShake());
+    });
+  }
+
+  Future<void> _toggleThemeFromShake() async {
+    final now = DateTime.now();
+    if (now.difference(_lastToggleAt) < _toggleCooldown) {
+      return;
+    }
+    _lastToggleAt = now;
+
+    await ref.read(themeModeProvider.notifier).toggle();
+  }
+
+  @override
+  void dispose() {
+    _accelerometerSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(

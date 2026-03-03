@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:recipe_finder/features/auth/presentation/state/auth_state.dart';
 import 'package:recipe_finder/features/auth/presentation/view_model/auth_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:recipe_finder/core/services/biometric/biometric_auth_service.dart';
+import 'package:recipe_finder/core/services/storage/user_session_service.dart';
 import 'package:recipe_finder/features/dashboard/presentation/pages/button_navigation.dart';
 import 'signup_screen.dart';
 
@@ -14,10 +18,93 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool showPassword = false;
+  bool _canUseBiometricLogin = false;
+  bool _isBiometricLoading = false;
 
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadBiometricLoginAvailability());
+  }
+
+  Future<void> _loadBiometricLoginAvailability() async {
+    final session = ref.read(userSessionServiceProvider);
+    final biometricService = ref.read(biometricAuthServiceProvider);
+
+    final enabled = await session.isBiometricEnabled();
+    final available = await biometricService.isBiometricAvailable();
+
+    if (!mounted) return;
+    setState(() {
+      _canUseBiometricLogin = enabled && available;
+    });
+  }
+
+  Future<void> _loginWithBiometric() async {
+    if (_isBiometricLoading) return;
+
+    setState(() => _isBiometricLoading = true);
+    try {
+      final session = ref.read(userSessionServiceProvider);
+      final biometricService = ref.read(biometricAuthServiceProvider);
+      final credentials = await session.getBiometricCredentials();
+
+      if (credentials == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No saved biometric credentials found.')),
+        );
+        return;
+      }
+
+      final authenticated = await biometricService.authenticate(
+        reason: 'Authenticate to login with fingerprint',
+      );
+
+      if (!authenticated) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fingerprint verification failed.')),
+        );
+        return;
+      }
+
+      await ref
+          .read(authViewModelProvider.notifier)
+          .login(credentials.email, credentials.password);
+    } finally {
+      if (mounted) {
+        setState(() => _isBiometricLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleAuthenticatedLogin() async {
+    final session = ref.read(userSessionServiceProvider);
+    if (_emailController.text.trim().isNotEmpty &&
+        _passwordController.text.isNotEmpty) {
+      await session.saveBiometricCredentials(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Login successful!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ButtonNavigation()),
+    );
+  }
 
   @override
   void dispose() {
@@ -32,16 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     ref.listen<AuthState>(authViewModelProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login successful!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ButtonNavigation()),
-        );
+        unawaited(_handleAuthenticatedLogin());
       } else if (next.status == AuthStatus.error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -153,7 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 55,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.25),
+                      backgroundColor: Colors.white.withValues(alpha: 0.25),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: const BorderSide(color: Colors.white),
@@ -186,6 +264,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                   ),
                 ),
+
+                if (_canUseBiometricLogin) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white70),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: authState.status == AuthStatus.loading || _isBiometricLoading
+                          ? null
+                          : _loginWithBiometric,
+                      icon: _isBiometricLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.fingerprint, color: Colors.white),
+                      label: const Text(
+                        'Tap to login with fingerprint',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 20),
 
@@ -275,7 +386,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: Colors.white70),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.15),
+      fillColor: Colors.white.withValues(alpha: 0.15),
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

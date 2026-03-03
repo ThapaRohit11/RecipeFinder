@@ -17,7 +17,7 @@ class ApiEndpoints {
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://192.168.1.110:5000';
+        return 'http://192.168.1.108:5000';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:

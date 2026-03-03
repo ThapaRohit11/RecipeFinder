@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:recipe_finder/core/api/api_client.dart';
 import 'package:recipe_finder/core/api/api_endpoints.dart';
+import 'package:recipe_finder/core/services/biometric/biometric_auth_service.dart';
 import 'package:recipe_finder/core/services/storage/user_session_service.dart';
 import 'package:recipe_finder/app/theme/theme_mode_provider.dart';
 import 'package:recipe_finder/features/auth/presentation/pages/login_screen.dart';
@@ -47,6 +48,72 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploading = false;
   bool _isProfileUpdating = false;
+  bool _isBiometricEnabled = false;
+  bool _isBiometricLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricPreference();
+  }
+
+  Future<void> _loadBiometricPreference() async {
+    final enabled = await ref.read(userSessionServiceProvider).isBiometricEnabled();
+    if (!mounted) return;
+    setState(() {
+      _isBiometricEnabled = enabled;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool enabled) async {
+    if (_isBiometricLoading) return;
+
+    setState(() => _isBiometricLoading = true);
+    try {
+      final biometricService = ref.read(biometricAuthServiceProvider);
+      final sessionService = ref.read(userSessionServiceProvider);
+
+      if (enabled) {
+        final available = await biometricService.isBiometricAvailable();
+        if (!available) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Biometric sensor is not available on this device.')),
+          );
+          return;
+        }
+
+        final verified = await biometricService.authenticate(
+          reason: 'Authenticate to enable fingerprint login',
+        );
+
+        if (!verified) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fingerprint verification failed.')),
+          );
+          return;
+        }
+      }
+
+      await sessionService.setBiometricEnabled(enabled);
+      if (!mounted) return;
+      setState(() {
+        _isBiometricEnabled = enabled;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(enabled ? 'Biometric login enabled' : 'Biometric login disabled'),
+          backgroundColor: enabled ? Colors.green : null,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBiometricLoading = false);
+      }
+    }
+  }
 
   Future<void> _pickImageFromCamera() async {
     try {
@@ -405,6 +472,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : _networkProfileImage(profilePictureUrl);
     final themeMode = ref.watch(themeModeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
+    final isShakeSensorEnabled = ref.watch(shakeThemeSensorProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return DashboardBackground(
@@ -544,9 +612,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SizedBox(height: 12),
               _themeModeCard(
                 isDarkMode: isDarkMode,
-                onChanged: (value) {
+                onDarkModeChanged: (value) {
                   ref.read(themeModeProvider.notifier).setDarkMode(value);
                 },
+              ),
+              const SizedBox(height: 12),
+              _themeSensorCard(
+                enabled: isShakeSensorEnabled,
+                onChanged: (value) {
+                  ref.read(shakeThemeSensorProvider.notifier).setEnabled(value);
+                },
+              ),
+              const SizedBox(height: 12),
+              _biometricCard(
+                enabled: _isBiometricEnabled,
+                isLoading: _isBiometricLoading,
+                onChanged: _toggleBiometric,
               ),
               const SizedBox(height: 12),
               _profileActionCard(
@@ -591,6 +672,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _themeModeCard({
     required bool isDarkMode,
+    required ValueChanged<bool> onDarkModeChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isDarkMode ? Icons.dark_mode : Icons.light_mode,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Theme',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isDarkMode ? 'Dark theme enabled' : 'Light theme enabled',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Dark mode',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      value: isDarkMode,
+                      onChanged: onDarkModeChanged,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _biometricCard({
+    required bool enabled,
+    required bool isLoading,
     required ValueChanged<bool> onChanged,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -619,10 +784,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               color: colorScheme.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              isDarkMode ? Icons.dark_mode : Icons.light_mode,
-              color: colorScheme.primary,
-            ),
+            child: Icon(Icons.fingerprint, color: colorScheme.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -630,7 +792,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Dark Mode',
+                  'Biometric Login',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -639,7 +801,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  isDarkMode ? 'Dark theme enabled' : 'Light theme enabled',
+                  enabled
+                      ? 'Fingerprint login is enabled'
+                      : 'Enable fingerprint login for next sign in',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Switch(
+                  value: enabled,
+                  onChanged: onChanged,
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _themeSensorCard({
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.sensors, color: colorScheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Theme Shake Sensor',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  enabled
+                      ? 'Shake phone to switch light/dark mode'
+                      : 'Shake sensor is disabled',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: colorScheme.onSurfaceVariant,
@@ -649,7 +886,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
           Switch(
-            value: isDarkMode,
+            value: enabled,
             onChanged: onChanged,
           ),
         ],

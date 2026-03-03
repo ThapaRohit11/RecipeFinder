@@ -7,6 +7,11 @@ final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((r
   return ThemeModeNotifier(prefs);
 });
 
+final shakeThemeSensorProvider = StateNotifierProvider<ShakeThemeSensorNotifier, bool>((ref) {
+  final prefs = ref.read(sharedPreferencesProvider);
+  return ShakeThemeSensorNotifier(prefs);
+});
+
 class ThemeModeNotifier extends StateNotifier<ThemeMode> {
   static const String _themeKey = 'theme_mode';
 
@@ -23,11 +28,34 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
   }
 
   Future<void> setDarkMode(bool isDark) async {
-    state = isDark ? ThemeMode.dark : ThemeMode.light;
-    await _prefs.setString(_themeKey, isDark ? 'dark' : 'light');
+    await setThemeMode(isDark ? ThemeMode.dark : ThemeMode.light);
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    final effectiveMode = mode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light;
+    state = effectiveMode;
+    final value = effectiveMode == ThemeMode.dark ? 'dark' : 'light';
+    await _prefs.setString(_themeKey, value);
   }
 
   Future<void> toggle() async {
     await setDarkMode(state != ThemeMode.dark);
+  }
+}
+
+class ShakeThemeSensorNotifier extends StateNotifier<bool> {
+  static const String _shakeSensorKey = 'shake_theme_sensor_enabled';
+
+  final dynamic _prefs;
+
+  ShakeThemeSensorNotifier(this._prefs) : super(_loadState(_prefs));
+
+  static bool _loadState(dynamic prefs) {
+    return prefs.getBool(_shakeSensorKey) ?? true;
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    state = enabled;
+    await _prefs.setBool(_shakeSensorKey, enabled);
   }
 }
